@@ -12,8 +12,7 @@ opencv:
 	pachctl create-repo images
 	pachctl create-pipeline -f $(data_dir)/edges.json
 	pachctl create-pipeline -f $(data_dir)/montage.json
-	pachctl put-file images master -i $(data_dir)/images.txt
-	pachctl put-file images master -i $(data_dir)/images2.txt
+	pachctl put-file images master 'http://imgur.com/46Q8nDz.jpg' 'http://imgur.com/g2QnNqa.jpg' 'http://imgur.com/8MN9Kg0.jpg'
 
 delete:
 	yes | pachctl delete-all

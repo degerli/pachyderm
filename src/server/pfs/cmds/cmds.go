@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -615,7 +614,6 @@ $ pachctl set-branch foo test master` + codeend,
 
 	var filePaths []string
 	var recursive bool
-	var inputFile string
 	var parallelism int
 	var split string
 	var targetFileDatums uint
@@ -657,10 +655,6 @@ $ pachctl put-file repo branch -f http://host/path
 # Put the data from an S3 bucket as repo/branch/s3_object:
 $ pachctl put-file repo branch -r -f s3://my_bucket
 
-# Put several files or URLs that are listed in file.
-# Files and URLs should be newline delimited.
-$ pachctl put-file repo branch -i file
-
 # Put several files or URLs that are listed at URL.
 # NOTE this URL can reference local files, so it could cause you to put sensitive
 # files into your Pachyderm cluster.
@@ -700,51 +694,11 @@ want to consider using commit IDs directly.
 			}
 
 			limiter := limit.New(int(parallelism))
-			var sources []string
-			if inputFile != "" {
-				// User has provided a file listing sources, one per line. Read sources
-				var r io.Reader
-				if inputFile == "-" {
-					r = os.Stdin
-				} else if url, err := url.Parse(inputFile); err == nil && url.Scheme != "" {
-					resp, err := http.Get(url.String())
-					if err != nil {
-						return err
-					}
-					defer func() {
-						if err := resp.Body.Close(); err != nil && retErr == nil {
-							retErr = err
-						}
-					}()
-					r = resp.Body
-				} else {
-					inputFile, err := os.Open(inputFile)
-					if err != nil {
-						return err
-					}
-					defer func() {
-						if err := inputFile.Close(); err != nil && retErr == nil {
-							retErr = err
-						}
-					}()
-					r = inputFile
-				}
-				// scan line by line
-				scanner := bufio.NewScanner(r)
-				for scanner.Scan() {
-					if filePath := scanner.Text(); filePath != "" {
-						sources = append(sources, filePath)
-					}
-				}
-			} else {
-				// User has provided a single source
-				sources = filePaths
-			}
 
 			// Arguments parsed; create putFileHelper and begin copying data
 			var eg errgroup.Group
 			filesPut := &gosync.Map{}
-			for _, source := range sources {
+			for _, source := range filePaths {
 				source := source
 				if len(args) == 2 {
 					// The user has not specified a path so we use source as path.
@@ -754,13 +708,13 @@ want to consider using commit IDs directly.
 					eg.Go(func() error {
 						return putFileHelper(c, pfc, repoName, branch, joinPaths("", source), source, recursive, overwrite, limiter, split, targetFileDatums, targetFileBytes, headerRecords, filesPut)
 					})
-				} else if len(sources) == 1 && len(args) == 3 {
+				} else if len(filePaths) == 1 && len(args) == 3 {
 					// We have a single source and the user has specified a path,
 					// we use the path and ignore source (in terms of naming the file).
 					eg.Go(func() error {
 						return putFileHelper(c, pfc, repoName, branch, path, source, recursive, overwrite, limiter, split, targetFileDatums, targetFileBytes, headerRecords, filesPut)
 					})
-				} else if len(sources) > 1 && len(args) == 3 {
+				} else if len(filePaths) > 1 && len(args) == 3 {
 					// We have multiple sources and the user has specified a path,
 					// we use that path as a prefix for the filepaths.
 					eg.Go(func() error {
@@ -772,7 +726,6 @@ want to consider using commit IDs directly.
 		}),
 	}
 	putFile.Flags().StringSliceVarP(&filePaths, "file", "f", []string{"-"}, "The file to be put, it can be a local file or a URL.")
-	putFile.Flags().StringVarP(&inputFile, "input-file", "i", "", "Read filepaths or URLs from a file.  If - is used, paths are read from the standard input.")
 	putFile.Flags().BoolVarP(&recursive, "recursive", "r", false, "Recursively put the files in a directory.")
 	putFile.Flags().IntVarP(&parallelism, "parallelism", "p", DefaultParallelism, "The maximum number of files that can be uploaded in parallel.")
 	putFile.Flags().StringVar(&split, "split", "", "Split the input file into smaller files, subject to the constraints of --target-file-datums and --target-file-bytes. Permissible values are `json` and `line`.")

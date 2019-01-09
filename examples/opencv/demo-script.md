@@ -26,7 +26,7 @@ pachctl list-repo
 ## Step 1 -- Add a file
 
 ```shell
-pachctl put-file images master -i examples/opencv/images.txt
+pachctl put-file images master 'http://imgur.com/46Q8nDz.jpg'
 ```
 
     - show them the mount
@@ -39,7 +39,7 @@ pachctl put-file images master -i examples/opencv/images.txt
 ## Step 2 -- Add new images
    
 ```shell
-pachctl put-file images master -i examples/opencv/images2.txt
+pachctl put-file images master 'http://imgur.com/g2QnNqa.jpg' 'http://imgur.com/8MN9Kg0.jpg'
 ```
 
     - refresh
@@ -73,7 +73,7 @@ pachctl list-job
 ## Step 4 -- add more data
 
 ```shell
-pachctl put-file images master -c -i examples/opencv/images3.txt
+pachctl put-file images master 'http://imgur.com/Togu2RY.jpg' 'http://imgur.com/w7RVTsv.jpg'
 ```
     - kicks off the pipeline
     - see new commit in the edges repo
