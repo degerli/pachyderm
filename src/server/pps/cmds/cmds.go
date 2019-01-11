@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	units "github.com/docker/go-units"
-	"github.com/fsouza/go-dockerclient"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	pachdclient "github.com/pachyderm/pachyderm/src/client"
@@ -430,10 +429,6 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 		}),
 	}
 
-	var pushImages bool
-	var registry string
-	var username string
-	var password string
 	var pipelinePath string
 	createPipeline := &cobra.Command{
 		Use:   "create-pipeline -f pipeline.json",
@@ -459,13 +454,6 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 				if request.Input.Atom != nil {
 					fmt.Println("WARNING: The `atom` input type has been deprecated and will be removed in a future version. Please replace `atom` with `pfs`.")
 				}
-				if pushImages {
-					pushedImage, err := pushImage(registry, username, password, request.Transform.Image)
-					if err != nil {
-						return err
-					}
-					request.Transform.Image = pushedImage
-				}
 				if _, err := client.PpsAPIClient.CreatePipeline(
 					client.Ctx(),
 					request,
@@ -477,10 +465,6 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 		}),
 	}
 	createPipeline.Flags().StringVarP(&pipelinePath, "file", "f", "-", "The file containing the pipeline, it can be a url or local file. - reads from stdin.")
-	createPipeline.Flags().BoolVarP(&pushImages, "push-images", "p", false, "If true, push local docker images into the cluster registry.")
-	createPipeline.Flags().StringVarP(&registry, "registry", "r", "docker.io", "The registry to push images to.")
-	createPipeline.Flags().StringVarP(&username, "username", "u", "", "The username to push images as, defaults to your OS username.")
-	createPipeline.Flags().StringVarP(&password, "password", "", "", "Your password for the registry being pushed to.")
 
 	var reprocess bool
 	updatePipeline := &cobra.Command{
@@ -509,13 +493,6 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 				if request.Input.Atom != nil {
 					fmt.Println("WARNING: The `atom` input type has been deprecated and will be removed in a future version. Please replace `atom` with `pfs`.")
 				}
-				if pushImages {
-					pushedImage, err := pushImage(registry, username, password, request.Transform.Image)
-					if err != nil {
-						return err
-					}
-					request.Transform.Image = pushedImage
-				}
 				if _, err := client.PpsAPIClient.CreatePipeline(
 					client.Ctx(),
 					request,
@@ -527,10 +504,6 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 		}),
 	}
 	updatePipeline.Flags().StringVarP(&pipelinePath, "file", "f", "-", "The file containing the pipeline, it can be a url or local file. - reads from stdin.")
-	updatePipeline.Flags().BoolVarP(&pushImages, "push-images", "p", false, "If true, push local docker images into the cluster registry.")
-	updatePipeline.Flags().StringVarP(&registry, "registry", "r", "docker.io", "The registry to push images to.")
-	updatePipeline.Flags().StringVarP(&username, "username", "u", "", "The username to push images as, defaults to your OS username.")
-	updatePipeline.Flags().StringVarP(&password, "password", "", "", "Your password for the registry being pushed to.")
 	updatePipeline.Flags().BoolVar(&reprocess, "reprocess", false, "If true, reprocess datums that were already processed by previous version of the pipeline.")
 
 	inspectPipeline := &cobra.Command{
@@ -844,108 +817,4 @@ func (arr ByCreationTime) Less(i, j int) bool {
 	}
 
 	return false
-}
-
-// pushImage pushes an image as registry/user/image. Registry and user can be
-// left empty.
-func pushImage(registry string, username string, password string, image string) (string, error) {
-	client, err := docker.NewClientFromEnv()
-	if err != nil {
-		return "", err
-	}
-	
-	repo, _ := docker.ParseRepositoryTag(image)
-	components := strings.Split(repo, "/")
-	name := components[len(components)-1]
-
-	var authConfig docker.AuthConfiguration
-	if username != "" && password != "" {
-		authConfig = docker.AuthConfiguration{ServerAddress: registry}
-		authConfig.Username = username
-		authConfig.Password = password
-	} else {
-		authConfigs, err := docker.NewAuthConfigurationsFromDockerCfg()
-		if err != nil {
-			if isDockerUsingKeychain() {
-				return "", fmt.Errorf("error parsing auth: %s; it looks like you may have a docker configuration not supported by the client library that we use. Please see here for remedial steps: https://github.com/pachyderm/pachyderm/issues/3293#issuecomment-448012383", err.Error())
-			}
-			
-			return "", fmt.Errorf("error parsing auth: %s, try running `docker login`", err.Error())
-		}
-		for _, _authConfig := range authConfigs.Configs {
-			serverAddress := _authConfig.ServerAddress
-			if strings.Contains(serverAddress, registry) {
-				authConfig = _authConfig
-				break
-			}
-		}
-	}
-	
-	pushRepo := fmt.Sprintf("%s/%s/%s", registry, username, name)
-	pushTag := uuid.NewWithoutDashes()
-	if err := client.TagImage(image, docker.TagImageOptions{
-		Repo:    pushRepo,
-		Tag:     pushTag,
-		Context: context.Background(),
-	}); err != nil {
-		return "", err
-	}
-	
-	fmt.Printf("Pushing %s:%s, this may take a while.\n", pushRepo, pushTag)
-	
-	if err := client.PushImage(
-		docker.PushImageOptions{
-			Name: pushRepo,
-			Tag:  pushTag,
-		},
-		authConfig,
-	); err != nil {
-		return "", err
-	}
-	
-	return fmt.Sprintf("%s:%s", pushRepo, pushTag), nil
-}
-
-// isBrokenPushImagesOnMac checks if the user has a configuration that is not
-// readable by our current docker client library.
-// TODO(ys): remove if/when this issue is addressed:
-// https://github.com/fsouza/go-dockerclient/issues/677
-func isDockerUsingKeychain() bool {
-	user, err := user.Current()
-	if err != nil {
-		return false
-	}
-
-	contents, err := ioutil.ReadFile(path.Join(user.HomeDir, ".docker/config.json"))
-	if err != nil {
-		return false
-	}
-
-	var j map[string]interface{}
-
-	if err = json.Unmarshal(contents, &j); err != nil {
-		return false
-	}
-
-	auths, ok := j["auths"]
-	if !ok {
-		return false
-	}
-
-	authsInner, ok := auths.(map[string]interface{})
-	if !ok {
-		return false
-	}
-
-	index, ok := authsInner["https://index.docker.io/v1/"]
-	if !ok {
-		return false
-	}
-
-	indexInner, ok := index.(map[string]interface{})
-	if !ok || len(indexInner) > 0 {
-		return false
-	}
-
-	return j["credsStore"] == "osxkeychain"
 }
