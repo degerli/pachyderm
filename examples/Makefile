@@ -4,7 +4,7 @@ opencv:
 	pachctl create-repo images
 	pachctl create-pipeline -f opencv/edges.json
 	pachctl create-pipeline -f opencv/montage.json
-	pachctl put-file images master 'http://imgur.com/46Q8nDz.jpg' 'http://imgur.com/g2QnNqa.jpg' 'http://imgur.com/8MN9Kg0.jpg'
+	pachctl put-file images master -f 'http://imgur.com/46Q8nDz.jpg' -f 'http://imgur.com/g2QnNqa.jpg' -f 'http://imgur.com/8MN9Kg0.jpg'
 
 object_detection:
 	pachctl create-repo images

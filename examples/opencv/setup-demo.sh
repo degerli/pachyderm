@@ -20,4 +20,4 @@ docker push `whoami`/opencv
 # Step 0
 pachctl create-repo images 
 # Step 1:
-# pachctl put-file images master 'http://imgur.com/46Q8nDz.jpg'
+# pachctl put-file images master -f 'http://imgur.com/46Q8nDz.jpg'
