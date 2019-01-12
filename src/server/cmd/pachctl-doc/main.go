@@ -19,7 +19,7 @@ func main() {
 
 func filePrepender(value string) string {
 	// No prepending needs to be done
-	return value
+	return ""
 }
 
 func linkHandler(value string) string {
