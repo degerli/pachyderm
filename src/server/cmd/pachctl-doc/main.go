@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra/doc"
 )
 
-var MD_LINK_PATTERN = regexp.MustCompile(".md$")
+var MD_LINK_PATTERN = regexp.MustCompile("\\.md$")
 
 type appEnv struct{}
 
