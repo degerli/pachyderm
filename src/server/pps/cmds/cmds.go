@@ -460,6 +460,7 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 					fmt.Println("WARNING: The `atom` input type has been deprecated and will be removed in a future version. Please replace `atom` with `pfs`.")
 				}
 				if pushImages {
+					fmt.Fprintln(os.Stderr, "`--push-images` is deprecated as of 1.8.2; see `--rebuild` instead")
 					pushedImage, err := pushImage(registry, username, password, request.Transform.Image)
 					if err != nil {
 						return err
@@ -510,6 +511,7 @@ All jobs created by a pipeline will create commits in the pipeline's repo.
 					fmt.Println("WARNING: The `atom` input type has been deprecated and will be removed in a future version. Please replace `atom` with `pfs`.")
 				}
 				if pushImages {
+					fmt.Fprintln(os.Stderr, "`--push-images` is deprecated as of 1.8.2; see `--rebuild` instead")
 					pushedImage, err := pushImage(registry, username, password, request.Transform.Image)
 					if err != nil {
 						return err
